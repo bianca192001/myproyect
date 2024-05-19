@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .product {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+        }
+        .product:last-child {
+            border-bottom: none;
+        }
+        .product h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .product p {
+            margin: 5px 0;
+        }
+        form {
+            margin-top: 20px;
+        }
+        .result {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lista de Productos</h1>
+        <div id="products"></div>
+        <form id="conversionForm">
+            <label for="clp_amount">Ingrese el valor en pesos chilenos sin puntos:</label><br>
+            <input type="text" id="clp_amount" name="clp_amount"><br>
+            <input type="submit" value="Convertir a USD">
+        </form>
+        <div id="result" class="result"></div>
+    </div>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('http://127.0.0.1:5000/productos')
+                .then(response => response.json())
+                .then(data => {
+                    const productsContainer = document.getElementById('products');
+                    data.forEach(product => {
+                        const productElement = document.createElement('div');
+                        productElement.classList.add('product');
+                        productElement.innerHTML = `
+                            <h2>${product.nombre}</h2>
+                            <p>Marca: ${product.marca}</p>
+                            <p>Tipo: ${product.tipo}</p>
+                            <p>Precio CLP: $${product.precio}</p>
+                            <p>Precio USD: ${product.precio_usd !== null ? product.precio_usd.toFixed(2) : 'N/A'}</p>
+                        `;
+                        
+                        productsContainer.appendChild(productElement);
+                    });
+                })
+                .catch(error => console.error('Error cargando los productos:', error));
+
+            document.getElementById('conversionForm').addEventListener('submit', function(event) {
+                event.preventDefault();
+                const clpAmount = document.getElementById('clp_amount').value;
+                fetch('http://127.0.0.1:5000/tipo_cambio', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ clp_amount: clpAmount })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.Dolar) {
+                        document.getElementById('result').textContent = `Equivalente en USD: ${data.Dolar}`;
+                    } else {
+                        document.getElementById('result').textContent = `Error: ${data.error}`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en la conversión:', error);
+                    document.getElementById('result').textContent = 'Error en la conversión.';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
