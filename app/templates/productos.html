@@ -27,6 +27,9 @@
         .product {
             border-bottom: 1px solid #ddd;
             padding: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .product:last-child {
             border-bottom: none;
@@ -45,12 +48,34 @@
             margin-top: 10px;
             font-weight: bold;
         }
+        .quantity {
+            display: flex;
+            align-items: center;
+        }
+        .quantity button {
+            padding: 5px;
+            font-size: 1em;
+            margin: 0 5px;
+        }
+        .total {
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .summary {
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Lista de Productos</h1>
         <div id="products"></div>
+        <div class="summary">
+            <p>Total a pagar: $<span id="grandTotal">0.00</span> CLP</p>
+            <p>Total a pagar: $<span id="grandTotalUSD">0.00</span> USD</p>
+        </div>
+        <button id="payButton">Pagar en Transbank</button>
         <form id="conversionForm">
             <label for="clp_amount">Ingrese el valor en pesos chilenos sin puntos:</label><br>
             <input type="text" id="clp_amount" name="clp_amount"><br>
@@ -68,15 +93,84 @@
                     data.forEach(product => {
                         const productElement = document.createElement('div');
                         productElement.classList.add('product');
+                        const precioCLP = parseFloat(product.precio);
+                        const precioUSD = product.precio_usd ? parseFloat(product.precio_usd) : 0;
                         productElement.innerHTML = `
-                            <h2>${product.nombre}</h2>
-                            <p>Marca: ${product.marca}</p>
-                            <p>Tipo: ${product.tipo}</p>
-                            <p>Precio CLP: $${product.precio}</p>
-                            <p>Precio USD: ${product.precio_usd !== null ? product.precio_usd.toFixed(2) : 'N/A'}</p>
+                            <div>
+                                <h2>${product.nombre}</h2>
+                                <p>Marca: ${product.marca}</p>
+                                <p>Tipo: ${product.tipo}</p>
+                                <p>Precio CLP: $${precioCLP.toFixed(2)}</p>
+                                <p>Precio USD: ${precioUSD ? precioUSD.toFixed(2) : 'N/A'}</p>
+                            </div>
+                            <div class="quantity">
+                                <button class="decrease">-</button>
+                                <span class="count">0</span>
+                                <button class="increase">+</button>
+                                <span class="total">$0.00</span>
+                            </div>
                         `;
-                        
                         productsContainer.appendChild(productElement);
+                    });
+
+                    const updateTotal = (productElement, count, price, priceUSD) => {
+                        const totalElement = productElement.querySelector('.total');
+                        const total = count * price;
+                        totalElement.textContent = `$${total.toFixed(2)}`;
+
+                        const totalUSDElement = productElement.querySelector('.totalUSD');
+                        const totalUSD = count * priceUSD;
+                        if (totalUSDElement) {
+                            totalUSDElement.textContent = `$${totalUSD.toFixed(2)}`;
+                        }
+                    };
+
+                    const updateGrandTotal = () => {
+                        let grandTotal = 0;
+                        let grandTotalUSD = 0;
+                        document.querySelectorAll('.product').forEach(productElement => {
+                            const count = parseInt(productElement.querySelector('.count').textContent);
+                            const priceText = productElement.querySelector('p:nth-of-type(3)').textContent.split('$')[1];
+                            const price = parseFloat(priceText);
+                            const priceUSDText = productElement.querySelector('p:nth-of-type(4)').textContent.split('$')[1];
+                            const priceUSD = parseFloat(priceUSDText);
+                            if (!isNaN(price)) {
+                                grandTotal += count * price;
+                            }
+                            if (!isNaN(priceUSD)) {
+                                grandTotalUSD += count * priceUSD;
+                            }
+                        });
+                        document.getElementById('grandTotal').textContent = grandTotal.toFixed(2);
+                        document.getElementById('grandTotalUSD').textContent = grandTotalUSD.toFixed(2);
+                    };
+
+                    document.querySelectorAll('.product').forEach(productElement => {
+                        const decreaseButton = productElement.querySelector('.decrease');
+                        const increaseButton = productElement.querySelector('.increase');
+                        const countElement = productElement.querySelector('.count');
+                        const priceText = productElement.querySelector('p:nth-of-type(3)').textContent.split('$')[1];
+                        const price = parseFloat(priceText);
+                        const priceUSDText = productElement.querySelector('p:nth-of-type(4)').textContent.split('$')[1];
+                        const priceUSD = parseFloat(priceUSDText);
+
+                        decreaseButton.addEventListener('click', () => {
+                            let count = parseInt(countElement.textContent);
+                            if (count > 0) {
+                                count--;
+                                countElement.textContent = count;
+                                updateTotal(productElement, count, price, priceUSD);
+                                updateGrandTotal();
+                            }
+                        });
+
+                        increaseButton.addEventListener('click', () => {
+                            let count = parseInt(countElement.textContent);
+                            count++;
+                            countElement.textContent = count;
+                            updateTotal(productElement, count, price, priceUSD);
+                            updateGrandTotal();
+                        });
                     });
                 })
                 .catch(error => console.error('Error cargando los productos:', error));
@@ -103,6 +197,23 @@
                     console.error('Error en la conversión:', error);
                     document.getElementById('result').textContent = 'Error en la conversión.';
                 });
+            });
+
+            document.getElementById('payButton').addEventListener('click', function() {
+                const amount = parseFloat(document.getElementById('grandTotal').textContent);
+                fetch('http://127.0.0.1:5000/pay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ amount: amount })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Redirigir al usuario a la URL de Transbank para completar el pago
+                    window.location.href = data.url + '?token_ws=' + data.token;
+                })
+                .catch(error => console.error('Error iniciando el pago:', error));
             });
         });
     </script>
